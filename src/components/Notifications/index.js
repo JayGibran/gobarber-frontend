@@ -1,5 +1,9 @@
-import React from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { MdNotifications } from 'react-icons/md';
+import { parseISO, formatDistance } from 'date-fns';
+import en from 'date-fns/locale/en-GB';
+
+import api from '~/services/api';
 
 import {
   Container,
@@ -10,38 +14,66 @@ import {
 } from './styles';
 
 export default function Notifications() {
+  const [visible, setVisible] = useState(false);
+  const [notifications, setNotifications] = useState([]);
+
+  const hasUnread = useMemo(
+    () => !!notifications.find(notification => notification.read === false),
+    [notifications]
+  );
+
+  function handleToggleVisible() {
+    setVisible(!visible);
+  }
+
+  async function handleMarkAsRead(id) {
+    await api.put(`/notifications/${id}`);
+
+    setNotifications(
+      notifications.map(notification =>
+        notification._id === id ? { ...notification, read: true } : notification
+      )
+    );
+  }
+
+  useEffect(() => {
+    async function loadNotification() {
+      const response = await api.get('/notifications');
+      const data = response.data.map(notification => ({
+        ...notification,
+        timeDistance: formatDistance(
+          parseISO(notification.createdAt),
+          new Date(),
+          { addSuffix: true, locale: en }
+        ),
+      }));
+
+      setNotifications(data);
+    }
+    loadNotification();
+  }, []);
+
   return (
     <Container>
-      <Badge hasUnread>
+      <Badge onClick={handleToggleVisible} hasUnread={hasUnread}>
         <MdNotifications color="#7159c1" size={20} />
       </Badge>
-      <NotificationList>
+      <NotificationList visible={visible}>
         <Scroll>
-          <Notification unread>
-            <p>You have a new schedule for tomorrow</p>
-            <time>2 days ago</time>
-            <button type="button">Mark as read</button>
-          </Notification>
-          <Notification>
-            <p>You have a new schedule for tomorrow</p>
-            <time>2 days ago</time>
-            <button type="button">Mark as read</button>
-          </Notification>
-          <Notification>
-            <p>You have a new schedule for tomorrow</p>
-            <time>2 days ago</time>
-            <button type="button">Mark as read</button>
-          </Notification>
-          <Notification>
-            <p>You have a new schedule for tomorrow</p>
-            <time>2 days ago</time>
-            <button type="button">Mark as read</button>
-          </Notification>
-          <Notification>
-            <p>You have a new schedule for tomorrow</p>
-            <time>2 days ago</time>
-            <button type="button">Mark as read</button>
-          </Notification>
+          {notifications.map(notification => (
+            <Notification key={notification._id} unread={!notification.read}>
+              <p>{notification.content}</p>
+              <time>{notification.timeDistance}</time>
+              {!notification.read && (
+                <button
+                  onClick={() => handleMarkAsRead(notification._id)}
+                  type="button"
+                >
+                  Mark as read
+                </button>
+              )}
+            </Notification>
+          ))}
         </Scroll>
       </NotificationList>
     </Container>
